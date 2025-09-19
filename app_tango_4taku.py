@@ -130,43 +130,44 @@ if ss.phase == "finished" and ss.show_save_ui:
         )
 
 # ==== 出題 ====
-... if ss.phase == "quiz" and ss.current:
-...     current = ss.current
-...     word = current["単語"]
-... 
-...     if ss.quiz_type == "意味→単語":
-...         st.subheader(f"意味: {current['意味']}")
-...         correct, options = make_choices(current, df, mode="meaning2word")
-... 
-...     elif ss.quiz_type == "単語→意味":
-...         st.subheader(f"単語: {word}")
-...         correct, options = make_choices(current, df, mode="word2meaning")
-... 
-...     elif ss.quiz_type == "空所英文＋和訳→単語":
-...         st.subheader(current["例文"].replace(word, "____"))
-...         st.caption(current["和訳"].replace(current["意味"], "____"))
-...         correct, options = make_choices(current, df, mode="meaning2word")
-... 
-...     elif ss.quiz_type == "空所英文→単語":
-...         st.subheader(current["例文"].replace(word, "____"))
-...         correct, options = make_choices(current, df, mode="meaning2word")
-... 
-...     # ==== 回答 ====
-...     selected = st.radio("選択肢から答えを選んでください", options)
-... 
-...     if st.button("解答する"):
-...         if selected == correct:
-...             st.success(f"正解！ {correct}")
-...             ss.remaining = [q for q in ss.remaining if q != current]
-...         else:
-...             st.error(f"不正解… 正解は {correct}")
-...         ss.history.append(word)
-...         ss.phase = "feedback"
-...         st.rerun()
-... 
+if ss.phase == "quiz" and ss.current:
+    current = ss.current
+    word = current["単語"]
+
+    if ss.quiz_type == "意味→単語":
+        st.subheader(f"意味: {current['意味']}")
+        correct, options = make_choices(current, df, mode="meaning2word")
+
+    elif ss.quiz_type == "単語→意味":
+        st.subheader(f"単語: {word}")
+        correct, options = make_choices(current, df, mode="word2meaning")
+
+    elif ss.quiz_type == "空所英文＋和訳→単語":
+        st.subheader(current["例文"].replace(word, "____"))
+        st.caption(current["和訳"].replace(current["意味"], "____"))
+        correct, options = make_choices(current, df, mode="meaning2word")
+
+    elif ss.quiz_type == "空所英文→単語":
+        st.subheader(current["例文"].replace(word, "____"))
+        correct, options = make_choices(current, df, mode="meaning2word")
+
+    # ==== 回答 ====
+    selected = st.radio("選択肢から答えを選んでください", options)
+
+    if st.button("解答する"):
+        if selected == correct:
+            st.success(f"正解！ {correct}")
+            ss.remaining = [q for q in ss.remaining if q != current]
+        else:
+            st.error(f"不正解… 正解は {correct}")
+        ss.history.append(word)
+        ss.phase = "feedback"
+        st.rerun()
+
 ... # ==== フィードバック ====
 ... if ss.phase == "feedback" and ss.last_outcome is None:
 ...     if st.button("次の問題へ"):
 ...         next_question()
 ...         st.rerun()
+
 
