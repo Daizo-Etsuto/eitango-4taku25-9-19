@@ -24,7 +24,7 @@ button, .stButton>button {
     width:100%;
 }
 .stTextInput>div>div>input {padding: 0.2em; font-size: 16px;}
-.translation {color:gray; font-size:16px; line-height:1.2; margin-bottom:0.6em;}  /* 和訳と選択肢の間を広げる */
+.translation {color:gray; font-size:16px; line-height:1.2; margin-bottom:0.8em;}  /* 和訳と選択肢の間を広げる */
 .choice-header {margin-top:0.8em;}
 </style>
 """, unsafe_allow_html=True)
@@ -34,6 +34,13 @@ st.markdown("<h1 style='font-size:22px;'>英単語４択クイズ（CSV版・ス
 
 # ==== ファイルアップロード ====
 uploaded_file = st.file_uploader("単語リスト（CSV, UTF-8推奨）をアップロードしてください  （利用期限25-9-30）", type=["csv"])
+
+# ✅ ファイルが新しく選ばれたときは session_state を完全リセット
+if uploaded_file is not None and "last_file" in st.session_state and st.session_state.last_file != uploaded_file.name:
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+if uploaded_file is not None:
+    st.session_state.last_file = uploaded_file.name
 
 if uploaded_file is None:
     st.info("まずは CSV をアップロードしてください。")
@@ -57,7 +64,7 @@ if "current" not in ss: ss.current = None
 if "phase" not in ss: ss.phase = "menu"
 if "last_outcome" not in ss: ss.last_outcome = None
 if "start_time" not in ss: ss.start_time = time.time()
-if "history" not in ss: ss.history = []   # [{単語, 出題形式, 結果}]
+if "history" not in ss: ss.history = []   # [{単語, 出題形式, 結果, 経過秒}]
 if "show_save_ui" not in ss: ss.show_save_ui = False
 if "user_name" not in ss: ss.user_name = ""
 if "quiz_type" not in ss: ss.quiz_type = None
@@ -73,7 +80,7 @@ def make_choices(correct_item, df, mode="word2meaning"):
         pool = df[df["意味"] != correct_item["意味"]]["単語"].tolist()
     wrongs = random.sample(pool, 3) if len(pool) >= 3 else random.choices(pool, k=3)
     choices = wrongs + [correct]
-    random.shuffle(choices)
+    random.shuffle(choices)  # ✅ ランダム配置
     return correct, choices
 
 def next_question():
@@ -85,6 +92,7 @@ def next_question():
     ss.phase = "quiz"
     ss.last_outcome = None
     ss.question = None
+    ss.q_start_time = time.time()  # 各問題の開始時間を記録
 
 def reset_quiz():
     ss.remaining = df.to_dict("records")
@@ -93,16 +101,17 @@ def reset_quiz():
     ss.last_outcome = None
     ss.start_time = time.time()
     ss.question = None
-    # ✅ ss.history はリセットしない → 累積記録
+    # ✅ 履歴はリセットしない（累積）
 
 def prepare_csv():
     timestamp = datetime.now(JST).strftime("%Y%m%d_%H%M%S")
     filename = f"{ss.user_name}_{timestamp}.csv"
+    history_df = pd.DataFrame(ss.history)
+    # 全体の学習時間
     elapsed = int(time.time() - ss.start_time)
     minutes = elapsed // 60
     seconds = elapsed % 60
-    history_df = pd.DataFrame(ss.history)
-    history_df["学習時間"] = f"{minutes}分{seconds}秒"
+    history_df["総学習時間"] = f"{minutes}分{seconds}秒"
     csv_buffer = io.StringIO()
     history_df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
     csv_data = csv_buffer.getvalue().encode("utf-8-sig")
@@ -149,7 +158,6 @@ if ss.phase == "quiz" and ss.current:
     current = ss.current
     word = current["単語"]
 
-    # 問題文
     if ss.quiz_type == "意味→単語":
         st.subheader(f"意味: {current['意味']}")
         if ss.question is None:
@@ -164,10 +172,11 @@ if ss.phase == "quiz" and ss.current:
 
     elif ss.quiz_type == "空所英文＋和訳→単語":
         st.subheader(current["例文"].replace(word, "____"))
-        st.markdown(f"<p class='translation'>{current['和訳']}</p>", unsafe_allow_html=True)
         if ss.question is None:
             correct, options = make_choices(current, df, mode="meaning2word")
             ss.question = {"correct": correct, "options": options, "word": word, "type": "空所英文＋和訳→単語"}
+        # ✅ 和訳は quiz フェーズでのみ表示
+        st.markdown(f"<p class='translation'>{current['和訳']}</p>", unsafe_allow_html=True)
 
     elif ss.quiz_type == "空所英文→単語":
         st.subheader(current["例文"].replace(word, "____"))
@@ -179,23 +188,29 @@ if ss.phase == "quiz" and ss.current:
     st.markdown("<p class='choice-header'>選択肢から答えを選んでください</p>", unsafe_allow_html=True)
     for opt in ss.question["options"]:
         if st.button(opt, key=f"opt_{len(ss.history)}_{opt}"):
+            elapsed_q = int(time.time() - ss.q_start_time)  # 問題ごとの経過秒
             if opt == ss.question["correct"]:
-                ss.last_outcome = ("正解", ss.question)
+                ss.last_outcome = ("正解", ss.question, elapsed_q)
                 ss.remaining = [q for q in ss.remaining if q != current]
             else:
-                ss.last_outcome = ("不正解", ss.question)
+                ss.last_outcome = ("不正解", ss.question, elapsed_q)
             ss.phase = "feedback"
             st.rerun()
 
 # ==== フィードバック ====
 if ss.phase == "feedback" and ss.last_outcome:
-    status, qinfo = ss.last_outcome
+    status, qinfo, elapsed_q = ss.last_outcome
     if status == "正解":
         st.success(f"正解！ {qinfo['correct']}")
     else:
         st.error(f"不正解… 正解は {qinfo['correct']}")
     # ✅ 履歴に詳細を保存
-    ss.history.append({"単語": qinfo["word"], "出題形式": qinfo["type"], "結果": status})
-    time.sleep(1)
+    ss.history.append({
+        "単語": qinfo["word"],
+        "出題形式": qinfo["type"],
+        "結果": status,
+        "経過秒": elapsed_q
+    })
+    time.sleep(1)  # フィードバック表示時間
     next_question()
     st.rerun()
