@@ -149,9 +149,13 @@ if ss.phase == "quiz" and ss.current:
         correct, options = make_choices(current, df, mode="meaning2word")
 
     # ==== 回答 ====
-    selected = st.radio("選択肢から答えを選んでください", options)
+    selected = st.radio(
+        "選択肢から答えを選んでください",
+        options,
+        key=f"quiz_radio_{len(ss.history)}"   # ★ keyをユニークにする
+    )
 
-    if st.button("解答する"):
+    if st.button("解答する", key=f"submit_{len(ss.history)}"):
         if selected == correct:
             st.success(f"正解！ {correct}")
             ss.remaining = [q for q in ss.remaining if q != current]
@@ -166,3 +170,4 @@ if ss.phase == "feedback":
     if st.button("次の問題へ"):
         next_question()
         st.rerun()
+
