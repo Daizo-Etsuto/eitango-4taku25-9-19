@@ -31,22 +31,31 @@ if "remaining" not in ss: ss.remaining = df.to_dict("records")
 if "current" not in ss: ss.current = None
 if "phase" not in ss: ss.phase = "menu"   # menu / quiz / feedback / done / finished
 if "start_time" not in ss: ss.start_time = time.time()
-if "history" not in ss: ss.history = []   # [{単語, 結果}]
+if "history" not in ss: ss.history = []   # [{単語, 結果, 出題形式}]
 if "show_save_ui" not in ss: ss.show_save_ui = False
 if "user_name" not in ss: ss.user_name = ""
 if "quiz_type" not in ss: ss.quiz_type = None
 if "last_outcome" not in ss: ss.last_outcome = None
 
 # ==== 選択肢生成 ====
-def make_choices(correct_item, df, mode="word2meaning"):
-    if mode == "word2meaning":
+def make_choices(correct_item, df, answer_type="word"):
+    """
+    answer_type="word" → 単語を選ばせる
+    answer_type="meaning" → 意味を選ばせる
+    """
+    if answer_type == "meaning":
         correct = correct_item["意味"]
         pool = df[df["単語"] != correct_item["単語"]]["意味"].tolist()
-    else:
+    else:  # answer_type == "word"
         correct = correct_item["単語"]
-        pool = df[df["意味"] != correct_item["意味"]]["単語"].tolist()
+        pool = df[df["単語"] != correct_item["単語"]]["単語"].tolist()
 
-    wrongs = random.sample(pool, 3) if len(pool) >= 3 else pool
+    # 必ず正解を含む４択にする
+    if len(pool) >= 3:
+        wrongs = random.sample(pool, 3)
+    else:
+        wrongs = random.choices(pool, k=3)  # 足りない場合は重複ありで補う
+
     choices = wrongs + [correct]
     random.shuffle(choices)
     return correct, choices
@@ -65,7 +74,7 @@ def reset_quiz():
     ss.current = None
     ss.phase = "menu"
     ss.start_time = time.time()
-    # ss.history を消さない（累積する）
+    # 履歴は保持（累積）
 
 def prepare_csv():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -135,20 +144,20 @@ if ss.phase == "quiz" and ss.current:
 
     if ss.quiz_type == "意味→単語":
         st.subheader(f"意味: {current['意味']}")
-        correct, options = make_choices(current, df, mode="meaning2word")
+        correct, options = make_choices(current, df, answer_type="word")
 
     elif ss.quiz_type == "単語→意味":
         st.subheader(f"単語: {word}")
-        correct, options = make_choices(current, df, mode="word2meaning")
+        correct, options = make_choices(current, df, answer_type="meaning")
 
     elif ss.quiz_type == "空所英文＋和訳→単語":
         st.subheader(current["例文"].replace(word, "____"))
         st.caption(current["和訳"].replace(current["意味"], "____"))
-        correct, options = make_choices(current, df, mode="meaning2word")
+        correct, options = make_choices(current, df, answer_type="word")
 
     elif ss.quiz_type == "空所英文→単語":
         st.subheader(current["例文"].replace(word, "____"))
-        correct, options = make_choices(current, df, mode="meaning2word")
+        correct, options = make_choices(current, df, answer_type="word")
 
     # ==== 回答（ボタン式） ====
     st.write("選択肢から答えを選んでください")
@@ -159,7 +168,7 @@ if ss.phase == "quiz" and ss.current:
                 ss.remaining = [q for q in ss.remaining if q != current]
             else:
                 ss.last_outcome = ("不正解", word)
-            ss.history.append({"単語": word, "結果": ss.last_outcome[0]})
+            ss.history.append({"単語": word, "結果": ss.last_outcome[0], "出題形式": ss.quiz_type})
             ss.phase = "feedback"
             st.rerun()
 
