@@ -178,12 +178,22 @@ if ss.phase == "quiz" and ss.current:
     for opt in options:
         if st.button(opt, key=f"opt_{len(ss.history)}_{opt}"):
             if opt == correct:
-                st.success(f"正解！ {correct}")
+                ss.last_outcome = ("正解", correct)
                 ss.remaining = [q for q in ss.remaining if q != current]
             else:
-                st.error(f"不正解… 正解は {correct}")
+                ss.last_outcome = ("不正解", correct)
             ss.history.append(word)
-            # ✅ フィードバックを2秒表示して次へ
-            time.sleep(2)
-            next_question()
+            ss.phase = "feedback"
             st.rerun()
+
+# ==== フィードバック ====
+if ss.phase == "feedback" and ss.last_outcome:
+    status, correct_word = ss.last_outcome
+    if status == "正解":
+        st.success(f"正解！ {correct_word}")
+    else:
+        st.error(f"不正解… 正解は {correct_word}")
+    # ✅ 2秒待機して次へ
+    time.sleep(2)
+    next_question()
+    st.rerun()
