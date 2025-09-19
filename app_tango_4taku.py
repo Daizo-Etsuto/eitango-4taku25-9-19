@@ -59,7 +59,7 @@ if "history" not in ss: ss.history = []
 if "show_save_ui" not in ss: ss.show_save_ui = False
 if "user_name" not in ss: ss.user_name = ""
 if "quiz_type" not in ss: ss.quiz_type = None
-if "question" not in ss: ss.question = None  # 選択肢を固定するため
+if "question" not in ss: ss.question = None  # 選択肢固定用
 
 # ==== 選択肢生成 ====
 def make_choices(correct_item, df, mode="word2meaning"):
@@ -147,7 +147,6 @@ if ss.phase == "quiz" and ss.current:
     current = ss.current
     word = current["単語"]
 
-    # 問題文の表示
     if ss.quiz_type == "意味→単語":
         st.subheader(f"意味: {current['意味']}")
         if ss.question is None:
@@ -193,6 +192,6 @@ if ss.phase == "feedback" and ss.last_outcome:
         st.success(f"正解！ {correct_word}")
     else:
         st.error(f"不正解… 正解は {correct_word}")
-    time.sleep(2)  # 2秒表示
+    time.sleep(1)  # ✅ 1秒に変更
     next_question()
     st.rerun()
