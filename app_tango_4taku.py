@@ -12,8 +12,7 @@ try:
 except Exception:
     JST = timezone(timedelta(hours=9))  # フォールバック
 with col2:
-st.title("英単語４択クイズ")
-
+    st.markdown("2025-9-31まで利用可能")
 # ==== ファイルアップロード ====
 uploaded_file = st.file_uploader("単語リスト（CSV, UTF-8推奨）をアップロードしてください", type=["csv"])
     st.markdown("2025-9-31まで利用可能")
@@ -215,5 +214,6 @@ if ss.phase == "feedback" and ss.last_outcome:
         ss.question = None  # 次の問題で新しい選択肢を作る
         next_question()
         st.rerun()
+
 
 
