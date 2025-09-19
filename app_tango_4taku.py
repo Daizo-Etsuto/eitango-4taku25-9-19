@@ -17,7 +17,7 @@ st.markdown("""
 <style>
 h1, h2, h3, h4, h5, h6 {margin-top: 0.4em; margin-bottom: 0.4em;}
 p, div, label {margin-top: 0.2em; margin-bottom: 0.2em; line-height: 1.3;}
-button, .stButton>button {padding: 0.6em; margin: 0.2em 0; font-size:16px; width:100%;}
+button, .stButton>button {padding: 0.4em; margin: 0.2em 0; font-size:16px; width:100%;}
 .stTextInput>div>div>input {padding: 0.2em; font-size: 16px;}
 </style>
 """, unsafe_allow_html=True)
@@ -167,23 +167,18 @@ if ss.phase == "quiz" and ss.current:
         st.subheader(current["例文"].replace(word, "____"))
         correct, options = make_choices(current, df, mode="meaning2word")
 
-    # ==== 回答（横2列ボタン式） ====
+    # ==== 回答（ボタン式） ====
     st.write("選択肢から答えを選んでください")
-    for i in range(0, len(options), 2):
-        cols = st.columns(2)
-        for j, col in enumerate(cols):
-            if i + j < len(options):
-                opt = options[i + j]
-                with col:
-                    if st.button(opt, key=f"opt_{len(ss.history)}_{opt}"):
-                        if opt == correct:
-                            st.success(f"正解！ {correct}")
-                            ss.remaining = [q for q in ss.remaining if q != current]
-                        else:
-                            st.error(f"不正解… 正解は {correct}")
-                        ss.history.append(word)
-                        ss.phase = "feedback"
-                        st.rerun()
+    for opt in options:
+        if st.button(opt, key=f"opt_{len(ss.history)}_{opt}"):
+            if opt == correct:
+                st.success(f"正解！ {correct}")
+                ss.remaining = [q for q in ss.remaining if q != current]
+            else:
+                st.error(f"不正解… 正解は {correct}")
+            ss.history.append(word)
+            ss.phase = "feedback"
+            st.rerun()
 
 # ==== フィードバック ====
 if ss.phase == "feedback":
