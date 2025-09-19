@@ -12,12 +12,12 @@ try:
 except Exception:
     JST = timezone(timedelta(hours=9))  # フォールバック
 
-# ==== スタイル調整（スマホ対応・行間詰め） ====
+# ==== スタイル調整（スマホ対応・行間さらに狭く） ====
 st.markdown("""
 <style>
-h1, h2, h3, h4, h5, h6 {margin-top: 0.3em; margin-bottom: 0.3em;}
-p, div, label {margin-top: 0.1em; margin-bottom: 0.1em; line-height: 1.2;}
-button, .stButton>button {padding: 0.5em; margin: 0.15em 0; font-size:16px; width:100%;}
+h1, h2, h3, h4, h5, h6 {margin-top: 0.2em; margin-bottom: 0.2em;}
+p, div, label {margin-top: 0.05em; margin-bottom: 0.05em; line-height: 1.15;}
+button, .stButton>button {padding: 0.5em; margin: 0.1em; font-size:16px; width:100%;}
 .stTextInput>div>div>input {padding: 0.2em; font-size: 16px;}
 </style>
 """, unsafe_allow_html=True)
@@ -27,6 +27,8 @@ st.markdown("<h1 style='font-size:22px;'>英単語４択クイズ（CSV版・ス
 
 # ==== ファイルアップロード ====
 uploaded_file = st.file_uploader("単語リスト（CSV, UTF-8推奨）をアップロードしてください", type=["csv"])
+st.caption("利用期限25-9-30")  # 追加
+
 if uploaded_file is None:
     st.info("まずは CSV をアップロードしてください。")
     st.stop()
@@ -167,17 +169,22 @@ if ss.phase == "quiz" and ss.current:
         st.subheader(current["例文"].replace(word, "____"))
         correct, options = make_choices(current, df, mode="meaning2word")
 
-    # ==== 回答（ボタン式・縦配置でコンパクト） ====
+    # ==== 回答（横2列ボタン式） ====
     st.write("選択肢から答えを選んでください")
-    for opt in options:
-        if st.button(opt, key=f"opt_{len(ss.history)}_{opt}"):
-            if opt == correct:
-                st.success(f"正解！ {correct}")
-                ss.remaining = [q for q in ss.remaining if q != current]
-            else:
-                st.error(f"不正解… 正解は {correct}")
-            ss.history.append(word)
-            # 自動で次の問題へ進む
-            time.sleep(1)
-            next_question()
-            st.rerun()
+    for i in range(0, len(options), 2):
+        cols = st.columns(2, gap="small")
+        for j, col in enumerate(cols):
+            if i + j < len(options):
+                opt = options[i + j]
+                with col:
+                    if st.button(opt, key=f"opt_{len(ss.history)}_{opt}"):
+                        if opt == correct:
+                            st.success(f"正解！ {correct}")
+                            ss.remaining = [q for q in ss.remaining if q != current]
+                        else:
+                            st.error(f"不正解… 正解は {correct}")
+                        ss.history.append(word)
+                        # 自動で2秒後に次の問題へ
+                        time.sleep(2)
+                        next_question()
+                        st.rerun()
