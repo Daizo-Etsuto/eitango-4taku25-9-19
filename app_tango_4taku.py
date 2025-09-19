@@ -30,7 +30,6 @@ ss = st.session_state
 if "remaining" not in ss: ss.remaining = df.to_dict("records")
 if "current" not in ss: ss.current = None
 if "phase" not in ss: ss.phase = "menu"   # menu / quiz / feedback / done / finished
-if "last_outcome" not in ss: ss.last_outcome = None
 if "start_time" not in ss: ss.start_time = time.time()
 if "history" not in ss: ss.history = []
 if "show_save_ui" not in ss: ss.show_save_ui = False
@@ -58,13 +57,11 @@ def next_question():
         return
     ss.current = random.choice(ss.remaining)
     ss.phase = "quiz"
-    ss.last_outcome = None
 
 def reset_quiz():
     ss.remaining = df.to_dict("records")
     ss.current = None
     ss.phase = "menu"
-    ss.last_outcome = None
     ss.start_time = time.time()
     ss.history = []
 
@@ -164,10 +161,8 @@ if ss.phase == "quiz" and ss.current:
         ss.phase = "feedback"
         st.rerun()
 
-... # ==== フィードバック ====
-... if ss.phase == "feedback" and ss.last_outcome is None:
-...     if st.button("次の問題へ"):
-...         next_question()
-...         st.rerun()
-
-
+# ==== フィードバック ====
+if ss.phase == "feedback":
+    if st.button("次の問題へ"):
+        next_question()
+        st.rerun()
