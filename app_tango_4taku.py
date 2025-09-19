@@ -31,10 +31,11 @@ if "remaining" not in ss: ss.remaining = df.to_dict("records")
 if "current" not in ss: ss.current = None
 if "phase" not in ss: ss.phase = "menu"   # menu / quiz / feedback / done / finished
 if "start_time" not in ss: ss.start_time = time.time()
-if "history" not in ss: ss.history = []
+if "history" not in ss: ss.history = []   # [{単語, 結果}]
 if "show_save_ui" not in ss: ss.show_save_ui = False
 if "user_name" not in ss: ss.user_name = ""
 if "quiz_type" not in ss: ss.quiz_type = None
+if "last_outcome" not in ss: ss.last_outcome = None
 
 # ==== 選択肢生成 ====
 def make_choices(correct_item, df, mode="word2meaning"):
@@ -57,13 +58,14 @@ def next_question():
         return
     ss.current = random.choice(ss.remaining)
     ss.phase = "quiz"
+    ss.last_outcome = None
 
 def reset_quiz():
     ss.remaining = df.to_dict("records")
     ss.current = None
     ss.phase = "menu"
     ss.start_time = time.time()
-    ss.history = []
+    # ss.history を消さない（累積する）
 
 def prepare_csv():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -73,7 +75,7 @@ def prepare_csv():
     minutes = elapsed // 60
     seconds = elapsed % 60
 
-    history_df = pd.DataFrame(ss.history, columns=["学習単語"])
+    history_df = pd.DataFrame(ss.history)
     history_df["学習時間"] = f"{minutes}分{seconds}秒"
 
     csv_buffer = io.StringIO()
@@ -153,18 +155,22 @@ if ss.phase == "quiz" and ss.current:
     for opt in options:
         if st.button(opt, key=f"opt_{len(ss.history)}_{opt}"):
             if opt == correct:
-                st.success(f"正解！ {correct}")
+                ss.last_outcome = ("正解", word)
                 ss.remaining = [q for q in ss.remaining if q != current]
             else:
-                st.error(f"不正解… 正解は {correct}")
-            ss.history.append(word)
+                ss.last_outcome = ("不正解", word)
+            ss.history.append({"単語": word, "結果": ss.last_outcome[0]})
             ss.phase = "feedback"
             st.rerun()
 
 # ==== フィードバック ====
-if ss.phase == "feedback":
+if ss.phase == "feedback" and ss.last_outcome:
+    status, word = ss.last_outcome
+    if status == "正解":
+        st.success(f"正解！ {word}")
+    else:
+        st.error(f"不正解… 正解は {word}")
+
     if st.button("次の問題へ"):
         next_question()
         st.rerun()
-
-
