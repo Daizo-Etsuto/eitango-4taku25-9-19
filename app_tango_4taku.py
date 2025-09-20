@@ -24,7 +24,7 @@ button, .stButton>button {
     width:100%;
 }
 .stTextInput>div>div>input {padding: 0.2em; font-size: 16px;}
-.translation {color:gray; font-size:16px; line-height:1.2; margin-bottom:0.8em;}  /* 和訳と選択肢の間を広げる */
+.translation {color:gray; font-size:16px; line-height:1.2; margin-bottom:0.8em;}
 .choice-header {margin-top:0.8em;}
 </style>
 """, unsafe_allow_html=True)
@@ -33,16 +33,22 @@ button, .stButton>button {
 st.markdown("<h1 style='font-size:22px;'>英単語４択クイズ（CSV版・スマホ対応）</h1>", unsafe_allow_html=True)
 
 # ==== ファイルアップロード ====
-uploaded_file = st.file_uploader("単語リスト（CSV, UTF-8推奨）をアップロードしてください  （利用期限25-9-30）", type=["csv"])
+uploaded_file = st.file_uploader(
+    "単語リスト（CSV, UTF-8推奨）をアップロードしてください  （利用期限25-9-30）",
+    type=["csv"],
+    key="file_uploader"
+)
 
-# ✅ ファイルが新しく選ばれたときは session_state を完全リセット
-if uploaded_file is not None and "last_file" in st.session_state and st.session_state.last_file != uploaded_file.name:
+# ==== 初期化関数 ====
+def reset_all():
+    """完全初期化（保存後やファイル削除時に使う）"""
     for key in list(st.session_state.keys()):
-        del st.session_state[key]
-if uploaded_file is not None:
-    st.session_state.last_file = uploaded_file.name
+        if key != "file_uploader":  # アップローダー自体は残す
+            del st.session_state[key]
 
+# ==== ファイル削除時に初期化 ====
 if uploaded_file is None:
+    reset_all()
     st.info("まずは CSV をアップロードしてください。")
     st.stop()
 
@@ -64,11 +70,11 @@ if "current" not in ss: ss.current = None
 if "phase" not in ss: ss.phase = "menu"
 if "last_outcome" not in ss: ss.last_outcome = None
 if "start_time" not in ss: ss.start_time = time.time()
-if "history" not in ss: ss.history = []   # [{単語, 出題形式, 結果, 経過秒}]
+if "history" not in ss: ss.history = []
 if "show_save_ui" not in ss: ss.show_save_ui = False
 if "user_name" not in ss: ss.user_name = ""
 if "quiz_type" not in ss: ss.quiz_type = None
-if "question" not in ss: ss.question = None  # 選択肢固定用
+if "question" not in ss: ss.question = None
 
 # ==== 選択肢生成 ====
 def make_choices(correct_item, df, mode="word2meaning"):
@@ -80,7 +86,7 @@ def make_choices(correct_item, df, mode="word2meaning"):
         pool = df[df["意味"] != correct_item["意味"]]["単語"].tolist()
     wrongs = random.sample(pool, 3) if len(pool) >= 3 else random.choices(pool, k=3)
     choices = wrongs + [correct]
-    random.shuffle(choices)  # ✅ ランダム配置
+    random.shuffle(choices)
     return correct, choices
 
 def next_question():
@@ -92,7 +98,7 @@ def next_question():
     ss.phase = "quiz"
     ss.last_outcome = None
     ss.question = None
-    ss.q_start_time = time.time()  # 各問題の開始時間を記録
+    ss.q_start_time = time.time()
 
 def reset_quiz():
     ss.remaining = df.to_dict("records")
@@ -101,13 +107,12 @@ def reset_quiz():
     ss.last_outcome = None
     ss.start_time = time.time()
     ss.question = None
-    # ✅ 履歴はリセットしない（累積）
+    # 履歴は保持
 
 def prepare_csv():
     timestamp = datetime.now(JST).strftime("%Y%m%d_%H%M%S")
     filename = f"{ss.user_name}_{timestamp}.csv"
     history_df = pd.DataFrame(ss.history)
-    # 全体の学習時間
     elapsed = int(time.time() - ss.start_time)
     minutes = elapsed // 60
     seconds = elapsed % 60
@@ -151,7 +156,10 @@ if ss.phase == "finished" and ss.show_save_ui:
     ss.user_name = st.text_input("氏名を入力してください", value=ss.user_name)
     if ss.user_name:
         filename, csv_data = prepare_csv()
-        st.download_button("📥 保存（ダウンロード）", csv_data, filename, "text/csv")
+        if st.download_button("📥 保存（ダウンロード）", data=csv_data, file_name=filename, mime="text/csv"):
+            reset_all()  # ✅ 保存後に初期状態に戻す
+            st.success("保存しました。新しい学習を始められます。")
+            st.rerun()
 
 # ==== 出題 ====
 if ss.phase == "quiz" and ss.current:
@@ -175,7 +183,6 @@ if ss.phase == "quiz" and ss.current:
         if ss.question is None:
             correct, options = make_choices(current, df, mode="meaning2word")
             ss.question = {"correct": correct, "options": options, "word": word, "type": "空所英文＋和訳→単語"}
-        # ✅ 和訳は quiz フェーズでのみ表示
         st.markdown(f"<p class='translation'>{current['和訳']}</p>", unsafe_allow_html=True)
 
     elif ss.quiz_type == "空所英文→単語":
@@ -184,11 +191,10 @@ if ss.phase == "quiz" and ss.current:
             correct, options = make_choices(current, df, mode="meaning2word")
             ss.question = {"correct": correct, "options": options, "word": word, "type": "空所英文→単語"}
 
-    # 選択肢
     st.markdown("<p class='choice-header'>選択肢から答えを選んでください</p>", unsafe_allow_html=True)
     for opt in ss.question["options"]:
         if st.button(opt, key=f"opt_{len(ss.history)}_{opt}"):
-            elapsed_q = int(time.time() - ss.q_start_time)  # 問題ごとの経過秒
+            elapsed_q = int(time.time() - ss.q_start_time)
             if opt == ss.question["correct"]:
                 ss.last_outcome = ("正解", ss.question, elapsed_q)
                 ss.remaining = [q for q in ss.remaining if q != current]
@@ -204,13 +210,12 @@ if ss.phase == "feedback" and ss.last_outcome:
         st.success(f"正解！ {qinfo['correct']}")
     else:
         st.error(f"不正解… 正解は {qinfo['correct']}")
-    # ✅ 履歴に詳細を保存
     ss.history.append({
         "単語": qinfo["word"],
         "出題形式": qinfo["type"],
         "結果": status,
         "経過秒": elapsed_q
     })
-    time.sleep(1)  # フィードバック表示時間
+    time.sleep(1)
     next_question()
     st.rerun()
