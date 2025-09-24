@@ -15,11 +15,11 @@ except Exception:
 now = datetime.now(JST)
 
 # ==== 利用制限 ====
-if 0 <= now.hour < 6:  # 深夜0時～朝6時
+if 0 <= now.hour < 6:
     st.error("本アプリは深夜0時～朝6時まで利用できません。")
     st.stop()
 
-if now.date() >= datetime(2025, 11, 1, tzinfo=JST).date():  # 2025年11月1日以降
+if now.date() >= datetime(2025, 11, 1, tzinfo=JST).date():
     st.error("本アプリの利用期限は2025年10月31日までです。")
     st.stop()
 
@@ -52,7 +52,6 @@ uploaded_file = st.file_uploader(
 
 # ==== 初期化関数 ====
 def reset_all():
-    """完全初期化（保存後やファイル削除時に使う）"""
     for key in list(st.session_state.keys()):
         if key != "file_uploader":
             del st.session_state[key]
@@ -78,12 +77,11 @@ if not required_cols.issubset(df.columns):
 ss = st.session_state
 if "remaining" not in ss: ss.remaining = df.to_dict("records")
 if "current" not in ss: ss.current = None
-if "phase" not in ss: ss.phase = "menu"    # menu / quiz / feedback / done / finished
+if "phase" not in ss: ss.phase = "menu"
 if "last_outcome" not in ss: ss.last_outcome = None
-# ラウンド開始時刻（リセットで更新）、累積時間（もう一回で加算）
 if "segment_start" not in ss: ss.segment_start = time.time()
 if "total_elapsed" not in ss: ss.total_elapsed = 0
-if "history" not in ss: ss.history = []    # [{単語, 出題形式, 結果, 経過秒}, ...]
+if "history" not in ss: ss.history = []
 if "show_save_ui" not in ss: ss.show_save_ui = False
 if "user_name" not in ss: ss.user_name = ""
 if "quiz_type" not in ss: ss.quiz_type = None
@@ -115,20 +113,17 @@ def next_question():
     ss.q_start_time = time.time()
 
 def reset_quiz_to_menu():
-    """メニューに戻して出題形式を選び直し可能。履歴と累積時間は保持。"""
     ss.remaining = df.to_dict("records")
     ss.current = None
     ss.phase = "menu"
     ss.last_outcome = None
     ss.question = None
-    # segment_start は「開始」押下時に更新するほうが明確
 
 def prepare_csv():
     timestamp = datetime.now(JST).strftime("%Y%m%d_%H%M%S")
     filename = f"{ss.user_name}_{timestamp}.csv"
     history_df = pd.DataFrame(ss.history)
 
-    # 総学習時間（全ラウンド合算）
     total_seconds = int(ss.total_elapsed + (time.time() - ss.segment_start))
     minutes = total_seconds // 60
     seconds = total_seconds % 60
@@ -147,7 +142,6 @@ if ss.phase == "menu":
     )
     if st.button("開始"):
         ss.quiz_type = quiz_type
-        # 新しいラウンド開始（segment_start を更新）
         ss.segment_start = time.time()
         next_question()
         st.rerun()
@@ -156,11 +150,22 @@ if ss.phase == "menu":
 if ss.phase == "done":
     st.success("全問終了！お疲れさまでした🎉")
 
+    # 今回の所要時間
+    elapsed = int(time.time() - ss.segment_start)
+    minutes = elapsed // 60
+    seconds = elapsed % 60
+    st.info(f"今回の所要時間: {minutes}分 {seconds}秒")
+
+    # 累積総時間
+    total_seconds = int(ss.total_elapsed + elapsed)
+    tmin = total_seconds // 60
+    tsec = total_seconds % 60
+    st.info(f"累積総時間: {tmin}分 {tsec}秒")
+
     col1, col2 = st.columns(2)
     with col1:
         if st.button("もう一回"):
-            # ここで直前ラウンド分を累積に加算し、次ラウンドの開始時刻を更新
-            ss.total_elapsed += time.time() - ss.segment_start
+            ss.total_elapsed += elapsed
             ss.segment_start = time.time()
             reset_quiz_to_menu()
             st.rerun()
