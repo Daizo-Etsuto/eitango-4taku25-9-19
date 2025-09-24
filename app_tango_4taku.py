@@ -12,6 +12,17 @@ try:
 except Exception:
     JST = timezone(timedelta(hours=9))
 
+now = datetime.now(JST)
+
+# ==== 利用制限 ====
+if 0 <= now.hour < 6:  # 深夜0時～朝6時
+    st.error("本アプリは深夜0時～朝6時まで利用できません。")
+    st.stop()
+
+if now.date() >= datetime(2025, 11, 1, tzinfo=JST).date():  # 2025年11月1日以降
+    st.error("本アプリの利用期限は2025年10月31日までです。")
+    st.stop()
+
 # ==== スタイル調整 ====
 st.markdown("""
 <style>
@@ -34,7 +45,7 @@ st.markdown("<h1 style='font-size:22px;'>英単語４択クイズ（CSV版・ス
 
 # ==== ファイルアップロード ====
 uploaded_file = st.file_uploader(
-    "単語リスト（CSV, UTF-8推奨）をアップロードしてください  （利用期限25-9-30）",
+    "単語リスト（CSV, UTF-8推奨）をアップロードしてください  （利用期限25-10-31）",
     type=["csv"],
     key="file_uploader"
 )
@@ -43,7 +54,7 @@ uploaded_file = st.file_uploader(
 def reset_all():
     """完全初期化（保存後やファイル削除時に使う）"""
     for key in list(st.session_state.keys()):
-        if key != "file_uploader":  # アップローダー自体は残す
+        if key != "file_uploader":
             del st.session_state[key]
 
 # ==== ファイル削除時に初期化 ====
@@ -67,14 +78,17 @@ if not required_cols.issubset(df.columns):
 ss = st.session_state
 if "remaining" not in ss: ss.remaining = df.to_dict("records")
 if "current" not in ss: ss.current = None
-if "phase" not in ss: ss.phase = "menu"
+if "phase" not in ss: ss.phase = "menu"    # menu / quiz / feedback / done / finished
 if "last_outcome" not in ss: ss.last_outcome = None
-if "start_time" not in ss: ss.start_time = time.time()
-if "history" not in ss: ss.history = []
+# ラウンド開始時刻（リセットで更新）、累積時間（もう一回で加算）
+if "segment_start" not in ss: ss.segment_start = time.time()
+if "total_elapsed" not in ss: ss.total_elapsed = 0
+if "history" not in ss: ss.history = []    # [{単語, 出題形式, 結果, 経過秒}, ...]
 if "show_save_ui" not in ss: ss.show_save_ui = False
 if "user_name" not in ss: ss.user_name = ""
 if "quiz_type" not in ss: ss.quiz_type = None
 if "question" not in ss: ss.question = None
+if "q_start_time" not in ss: ss.q_start_time = time.time()
 
 # ==== 選択肢生成 ====
 def make_choices(correct_item, df, mode="word2meaning"):
@@ -100,23 +114,26 @@ def next_question():
     ss.question = None
     ss.q_start_time = time.time()
 
-def reset_quiz():
+def reset_quiz_to_menu():
+    """メニューに戻して出題形式を選び直し可能。履歴と累積時間は保持。"""
     ss.remaining = df.to_dict("records")
     ss.current = None
     ss.phase = "menu"
     ss.last_outcome = None
-    ss.start_time = time.time()
     ss.question = None
-    # 履歴は保持
+    # segment_start は「開始」押下時に更新するほうが明確
 
 def prepare_csv():
     timestamp = datetime.now(JST).strftime("%Y%m%d_%H%M%S")
     filename = f"{ss.user_name}_{timestamp}.csv"
     history_df = pd.DataFrame(ss.history)
-    elapsed = int(time.time() - ss.start_time)
-    minutes = elapsed // 60
-    seconds = elapsed % 60
+
+    # 総学習時間（全ラウンド合算）
+    total_seconds = int(ss.total_elapsed + (time.time() - ss.segment_start))
+    minutes = total_seconds // 60
+    seconds = total_seconds % 60
     history_df["総学習時間"] = f"{minutes}分{seconds}秒"
+
     csv_buffer = io.StringIO()
     history_df.to_csv(csv_buffer, index=False, encoding="utf-8-sig")
     csv_data = csv_buffer.getvalue().encode("utf-8-sig")
@@ -130,18 +147,22 @@ if ss.phase == "menu":
     )
     if st.button("開始"):
         ss.quiz_type = quiz_type
+        # 新しいラウンド開始（segment_start を更新）
+        ss.segment_start = time.time()
         next_question()
         st.rerun()
 
 # ==== 全問終了 ====
 if ss.phase == "done":
     st.success("全問終了！お疲れさまでした🎉")
-    elapsed = int(time.time() - ss.start_time)
-    st.info(f"所要時間: {elapsed//60}分 {elapsed%60}秒")
+
     col1, col2 = st.columns(2)
     with col1:
         if st.button("もう一回"):
-            reset_quiz()
+            # ここで直前ラウンド分を累積に加算し、次ラウンドの開始時刻を更新
+            ss.total_elapsed += time.time() - ss.segment_start
+            ss.segment_start = time.time()
+            reset_quiz_to_menu()
             st.rerun()
     with col2:
         if st.button("終了"):
@@ -157,7 +178,7 @@ if ss.phase == "finished" and ss.show_save_ui:
     if ss.user_name:
         filename, csv_data = prepare_csv()
         if st.download_button("📥 保存（ダウンロード）", data=csv_data, file_name=filename, mime="text/csv"):
-            reset_all()  # ✅ 保存後に初期状態に戻す
+            reset_all()
             st.success("保存しました。新しい学習を始められます。")
             st.rerun()
 
