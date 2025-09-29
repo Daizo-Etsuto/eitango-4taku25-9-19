@@ -41,7 +41,7 @@ button, .stButton>button {
 """, unsafe_allow_html=True)
 
 # ==== タイトル ====
-st.markdown("<h1 style='font-size:22px;'>英単語４択クイズ（CSV版・スマホ対応）</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='font-size:22px;'>英単語４択クイズ（CSV版）</h1>", unsafe_allow_html=True)
 
 # ==== ファイルアップロード ====
 uploaded_file = st.file_uploader(
@@ -245,3 +245,4 @@ if ss.phase == "feedback" and ss.last_outcome:
     time.sleep(1)
     next_question()
     st.rerun()
+
