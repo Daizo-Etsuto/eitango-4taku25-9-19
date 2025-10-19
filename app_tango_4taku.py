@@ -41,7 +41,7 @@ button, .stButton>button {
 """, unsafe_allow_html=True)
 
 # ==== タイトル ====
-st.markdown("<h1 style='font-size:22px;'>英単語４択クイズ（CSV版）</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='font-size:22px;'>英単語４択クイズ（CSV版・スマホ対応）</h1>", unsafe_allow_html=True)
 
 # ==== ファイルアップロード ====
 uploaded_file = st.file_uploader(
@@ -75,9 +75,9 @@ if not required_cols.issubset(df.columns):
 
 # ==== セッション初期化 ====
 ss = st.session_state
-if "remaining" not in ss: ss.remaining = df.to_dict("records")
+if "remaining" not in ss: ss.remaining = []
 if "current" not in ss: ss.current = None
-if "phase" not in ss: ss.phase = "menu"
+if "phase" not in ss: ss.phase = "select_count"
 if "last_outcome" not in ss: ss.last_outcome = None
 if "segment_start" not in ss: ss.segment_start = time.time()
 if "total_elapsed" not in ss: ss.total_elapsed = 0
@@ -87,6 +87,7 @@ if "user_name" not in ss: ss.user_name = ""
 if "quiz_type" not in ss: ss.quiz_type = None
 if "question" not in ss: ss.question = None
 if "q_start_time" not in ss: ss.q_start_time = time.time()
+if "num_questions" not in ss: ss.num_questions = None
 
 # ==== 選択肢生成 ====
 def make_choices(correct_item, df, mode="word2meaning"):
@@ -113,9 +114,9 @@ def next_question():
     ss.q_start_time = time.time()
 
 def reset_quiz_to_menu():
-    ss.remaining = df.to_dict("records")
+    ss.remaining = []
     ss.current = None
-    ss.phase = "menu"
+    ss.phase = "select_count"
     ss.last_outcome = None
     ss.question = None
 
@@ -134,10 +135,50 @@ def prepare_csv():
     csv_data = csv_buffer.getvalue().encode("utf-8-sig")
     return filename, csv_data
 
-# ==== メニュー ====
-if ss.phase == "menu":
+# ==== ステップ①：問題数選択 ====
+if ss.phase == "select_count":
+    st.subheader("出題する問題数を選んでください")
+    total = len(df)
+    options = ["10問", "20問", f"全{total}問", "手入力"]
+    choice = st.radio("問題数を選択", options)
+
+    if choice == "手入力":
+        manual_num = st.number_input(
+            f"出題数を入力（1～{total}）",
+            min_value=1,
+            max_value=total,
+            step=1,
+            key="manual_input"
+        )
+    else:
+        manual_num = None
+
+    if st.button("次へ"):
+        if choice == "10問":
+            num_q = min(10, total)
+        elif choice == "20問":
+            num_q = min(20, total)
+        elif choice.startswith("全"):
+            num_q = total
+        elif choice == "手入力":
+            if manual_num is None or manual_num < 1:
+                st.error("1以上の数を入力してください。")
+                st.stop()
+            num_q = int(manual_num)
+        else:
+            num_q = total
+
+        ss.num_questions = num_q
+        sampled_df = df.sample(num_q) if num_q < len(df) else df
+        ss.remaining = sampled_df.to_dict("records")
+        ss.phase = "select_mode"
+        st.rerun()
+
+# ==== ステップ②：出題形式選択 ====
+if ss.phase == "select_mode":
+    st.subheader("出題形式を選んでください")
     quiz_type = st.radio(
-        "出題形式を選んでください",
+        "",
         ["意味→単語", "単語→意味", "空所英文＋和訳→単語", "空所英文→単語"]
     )
     if st.button("開始"):
@@ -150,13 +191,11 @@ if ss.phase == "menu":
 if ss.phase == "done":
     st.success("全問終了！お疲れさまでした🎉")
 
-    # 今回の所要時間
     elapsed = int(time.time() - ss.segment_start)
     minutes = elapsed // 60
     seconds = elapsed % 60
     st.info(f"今回の所要時間: {minutes}分 {seconds}秒")
 
-    # 累積総時間
     total_seconds = int(ss.total_elapsed + elapsed)
     tmin = total_seconds // 60
     tsec = total_seconds % 60
@@ -245,4 +284,3 @@ if ss.phase == "feedback" and ss.last_outcome:
     time.sleep(1)
     next_question()
     st.rerun()
-
